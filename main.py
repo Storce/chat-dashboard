@@ -8,19 +8,16 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 
 # --- Configuration ---
-CHAT_FILE_PATH = 'molly'  # <--- SET YOUR CHAT FILE PATH HERE
+CHAT_FILE_PATH = 'roni.txt'  # File path
 
-# Define the two main participants for "Him" / "Her" style analysis
 # The script will try to auto-detect the top 2 senders.
 # You can manually override them if needed, e.g.:
-# ACTUAL_USER1_NAME_IN_CHAT = "~Joe"
-# ACTUAL_USER2_NAME_IN_CHAT = "Molly Windsor"
 ACTUAL_USER1_NAME_IN_CHAT = None # Set to actual name from chat if auto-detection is not preferred
 ACTUAL_USER2_NAME_IN_CHAT = None # Set to actual name from chat
 
 # How they appear in the dashboard
-DISPLAY_NAME_USER1 = "Joe (e.g., Him)"
-DISPLAY_NAME_USER2 = "Mollly (e.g., Her)"
+DISPLAY_NAME_USER1 = "Roni"
+DISPLAY_NAME_USER2 = "Tiff"
 COLOR_USER1 = 'cornflowerblue' # Blue for "Him" in example
 COLOR_USER2 = 'lightpink'      # Pink for "Her" in example
 COLOR_TOTAL = 'mediumseagreen' # Green for "Us" in example
@@ -28,7 +25,7 @@ COLOR_TOTAL = 'mediumseagreen' # Green for "Us" in example
 # For "Words and Emojis" - specific word tracking (like "love" in the example)
 # Add words in lowercase. The analysis will be case-insensitive.
 TRACKED_KEYWORDS = {
-    "yes": ["yes", "yeah", "yep", "yea", "ok", "okay", "sure", "alright"],
+    "yes": ["yes", "yeah", "yep", "yea", "ok", "okay", "okk", "okkk", "sure", "alright"],
     "no": ["no", "nope", "nah"],
     "good": ["good", "great", "nice", "awesome", "amazing", "wonderful"],
     "hi": ["hi", "hello", "hey", "heya", "greetings"]
@@ -48,8 +45,9 @@ STOP_WORDS = set([
     'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
     'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so',
     'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should', 'now', 've', 'll', 'm', 're'
-    # Add more media-specific tags if they appear as words
-    , 'image', 'omitted', 'audio', 'video', 'sticker', 'gif', 'media', 'okay', 'yeah', 'nice', 'like', 'good', 'yes', 'im'
+    # More tags
+    , 'image', 'omitted', 'audio', 'video', 'sticker', 'gif', 'media', 'okay', 'yeah', 'nice', 'like', 'good' 
+    , 'yes', 'im', 'ok', 'okk', 'okkk'
 ])
 
 
@@ -62,34 +60,41 @@ def parse_whatsapp_chat(filepath):
     # Regex to capture date, time, sender, and message.
     # Handles M/D/YY or M/D/YYYY, and H:MM or I:MM AM/PM
     message_pattern = re.compile(
-        r"(\d{1,2}/\d{1,2}/\d{2,4}), "  # Date (e.g., 3/23/24 or 03/23/2024)
-        r"(\d{1,2}:\d{2}(?:\s*[AP]M)?) - "  # Time (e.g., 07:53 or 7:53 AM)
-        r"([^:]+): "  # Sender
-        r"(.*)"       # Message
+        r"\[(\d{1,2}/\d{1,2}/\d{2,4}), (\d{2}:\d{2}:\d{2})\] ([^:]+): (.*)"
     )
     current_message_parts = None
-
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 match = message_pattern.match(line)
                 if match:
-                    if current_message_parts: # Store previously accumulated message
+                    if current_message_parts:
                         messages_data.append(current_message_parts)
 
                     date_str, time_str, sender, message_content = match.groups()
-                    # Try to parse datetime with multiple formats
-                    dt_combined_str = f"{date_str} {time_str.upper()}" # Ensure AM/PM is uppercase
+
+                    # Different datetime format
+                    # dt_combined_str = f"{date_str} {time_str.upper()}" # Ensure AM/PM is uppercase
+                    # timestamp = None
+                    # for fmt in ('%d/%m/%y %H:%M', '%d/%m/%y %I:%M %p',         # 2-digit year
+                    #             '%d/%m/%Y %H:%M', '%d/%m/%Y %I:%M %p'):       # 4-digit year
+                    #     try:
+                    #         timestamp = datetime.strptime(dt_combined_str, fmt)
+                    #         break
+                    #     except ValueError:
+                    #         continue
+
+                    dt_combined_str = f"{date_str} {time_str}"
                     timestamp = None
-                    for fmt in ('%m/%d/%y %H:%M', '%m/%d/%y %I:%M %p',         # 2-digit year
-                                '%m/%d/%Y %H:%M', '%m/%d/%Y %I:%M %p'):       # 4-digit year
+
+                    for fmt in ('%m/%d/%y %H:%M:%S', '%m/%d/%Y %H:%M:%S'):
                         try:
                             timestamp = datetime.strptime(dt_combined_str, fmt)
                             break
                         except ValueError:
                             continue
-                    
+                    # print(match.groups())
                     if timestamp:
                         current_message_parts = {
                             "timestamp": timestamp,
@@ -198,14 +203,14 @@ def analyze_chat_data(df, user1_actual_name, user2_actual_name):
     all_text_for_words = ' '.join(df['message']).lower()
     words = re.findall(r'\b[a-z]+\b', all_text_for_words) # Only alphabetic words
     filtered_words = [word for word in words if word not in STOP_WORDS and len(word) > 1]
-    analysis['top_words'] = Counter(filtered_words).most_common(20)
+    analysis['top_words'] = Counter(filtered_words).most_common(30)
 
-    all_emojis_found = []
-    for message_text in df["message"]:
-        emojis_in_message = emoji.emoji_list(message_text)  # Use emoji.emoji_list to extract emojis
-        for emoji_item in emojis_in_message:
-            all_emojis_found.append(emoji_item['emoji'])  # Extract the emoji from the dictionary
-    analysis['top_emojis'] = Counter(all_emojis_found).most_common(15)
+    # all_emojis_found = []
+    # for message_text in df["message"]:
+    #     emojis_in_message = emoji.emoji_list(message_text)  # Use emoji.emoji_list to extract emojis
+    #     for emoji_item in emojis_in_message:
+    #         all_emojis_found.append(emoji_item['emoji'])  # Extract the emoji from the dictionary
+    # analysis['top_emojis'] = Counter(all_emojis_found).most_common(15)
 
     # Tracked Keywords Analysis
     analysis['tracked_keywords_counts'] = {}
@@ -372,19 +377,9 @@ def plot_top_items(ax, top_items_data, title, item_type="Words"):
         ax.text(0.5, 0.5, f"No {item_type.lower()} found.", ha='center', va='center', color='grey', fontsize=9)
         return
 
-    # --- Configuration for displaying items in this list ---
-    font_size = 7  # Use a small, generally readable font size for dense lists.
-                   # You can try 8 if 7 is too small, but it will fit fewer items.
-
-    # y_decrement_per_line is the crucial factor for line spacing.
-    # This value is in axis units (0 to 1 relative to subplot height).
-    # For font_size 7, a value of 0.030 to 0.032 usually provides clear spacing.
-    # If you use font_size 8, you might need 0.035 to 0.038.
-    y_decrement_per_line = 0.031  # Increased from a potential ~0.027 that caused overlap
-
-    # available_height_ratio: proportion of the subplot's height used for the list itself.
-    # Items are listed from y_pos = 0.85 downwards, with a small margin at the bottom (e.g., y=0.05).
-    available_height_ratio = 0.85 - 0.05  # This is 0.80
+    font_size = 7 
+    y_decrement_per_line = 0.031 
+    available_height_ratio = 0.85 - 0.05 
 
     if y_decrement_per_line <= 0: # Safety check
         ax.text(0.5, 0.5, "Invalid spacing.", ha='center', va='center', color='red', fontsize=9)
